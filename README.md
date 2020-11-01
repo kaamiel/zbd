@@ -1,2 +1,1 @@
-# zbd
-Zaawansowane Bazy Danych 2020
+# Zaawansowane Bazy Danych 2020
