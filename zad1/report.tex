@@ -1,0 +1,233 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{polski}
+\usepackage{hyperref}
+\usepackage[vmargin=0.8in]{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\definecolor{backcolour}{rgb}{.9, .9, .9}
+\lstset{backgroundcolor=\color{backcolour}, basicstyle=\ttfamily\footnotesize, breaklines=true}
+
+\title{Zaawansowane Bazy Danych 2020\\
+\large zadanie 1}
+
+\author{Kamil Dubil\\
+\href{mailto:kd370826@students.mimuw.edu.pl}{\tt kd370826@students.mimuw.edu.pl}}
+
+
+\begin{document}
+
+\maketitle
+
+Wygenerowane dane umieściłem w katalogu \texttt{data/}.
+
+
+\section{Wersja JSONowa}
+
+Tabele z danymi:
+\begin{lstlisting}
+DROP TABLE IF EXISTS jsonb_audience, jsonb_targets;
+
+CREATE TABLE jsonb_audience (
+    date date NOT NULL,
+    content jsonb NOT NULL
+);
+CREATE TABLE jsonb_targets (
+    content jsonb NOT NULL
+);
+\end{lstlisting}
+Wczytanie danych z plików:
+\begin{lstlisting}
+COPY jsonb_audience(content, date) FROM PROGRAM 'find /home/kd/zbd/zad1/data/ -type f -name "audience*json" -exec cat {} \; -exec echo -en "\t" \; -exec sh -c "basename {} | cut -c10-19" \;';
+COPY jsonb_targets(content) FROM '/home/kd/zbd/zad1/data/targets.json';
+\end{lstlisting}
+Zapytanie:
+\begin{lstlisting}
+WITH audience AS (
+    SELECT DISTINCT
+        date,
+        (jb->'person_id')::int person_id,
+        jb->>'demography' demography,
+        regexp_split_to_table(jb->>'contacts', '') contact
+    FROM (
+        SELECT
+            date,
+            jsonb_array_elements(content) jb
+        FROM
+            jsonb_audience
+        ) ta
+    WHERE
+        jb->>'contacts' != ''
+), targets AS (
+    SELECT
+        (jb->'target')::int id,
+        replace(jb->>'definition', ' ', '_') definition
+    FROM (
+        SELECT
+            jsonb_array_elements(content) jb
+        FROM
+            jsonb_targets
+        ) tt
+)
+SELECT
+    audience.date dzien,
+    targets.id grupa,
+    audience.contact reklama,
+    count(*) osob
+FROM
+    audience
+JOIN
+    targets
+ON
+    audience.demography LIKE targets.definition
+GROUP BY
+    dzien,
+    grupa,
+    reklama
+ORDER BY
+    dzien,
+    grupa,
+    reklama;
+\end{lstlisting}
+Wynik:
+\begin{lstlisting}
+   dzien    | grupa | reklama | osob 
+------------+-------+---------+------
+ 2019-01-01 |     0 | B       |    1
+ 2019-01-01 |     0 | C       |    2
+ 2019-01-01 |     0 | E       |    2
+ ...
+ 2019-01-30 |     9 | X       |    1
+ 2019-01-30 |     9 | Y       |    2
+ 2019-01-30 |     9 | Z       |    3
+(5721 rows)
+\end{lstlisting}
+Statystyki wykonania (fragment wyniku \texttt{EXPLAIN ANALYZE}):
+\begin{lstlisting}
+ Planning Time: 0.353 ms
+ JIT:
+   Functions: 23
+   Options: Inlining true, Optimization true, Expressions true, Deforming true
+   Timing: Generation 2.252 ms, Inlining 75.790 ms, Optimization 166.603 ms, Emission 108.365 ms, Total 353.010 ms
+ Execution Time: 426.394 ms
+\end{lstlisting}
+
+
+\section{Wersja SQLowa}
+
+Tymczasowe tabele z danymi:
+\begin{lstlisting}
+DROP TABLE IF EXISTS jsonb_audience, jsonb_targets;
+
+CREATE TABLE jsonb_audience (
+    date date NOT NULL,
+    content jsonb NOT NULL
+);
+CREATE TABLE jsonb_targets (
+    content jsonb NOT NULL
+);
+\end{lstlisting}
+Wczytanie danych z plików:
+\begin{lstlisting}
+COPY jsonb_audience(content, date) FROM PROGRAM 'find /home/kd/zbd/zad1/data/ -type f -name "audience*json" -exec cat {} \; -exec echo -en "\t" \; -exec sh -c "basename {} | cut -c10-19" \;';
+COPY jsonb_targets(content) FROM '/home/kd/zbd/zad1/data/targets.json';
+\end{lstlisting}
+Właściwe tabele i przeniesienie do nich danych:
+\begin{lstlisting}
+DROP TABLE IF EXISTS audience, targets;
+
+CREATE TABLE audience (
+    date date NOT NULL,
+    person_id int NOT NULL,
+    demography text NOT NULL,
+    contact char NOT NULL,
+    PRIMARY KEY (date, person_id, demography, contact)
+);
+CREATE TABLE targets (
+    id int PRIMARY KEY,
+    definition text NOT NULL
+);
+
+INSERT INTO audience (
+    SELECT DISTINCT
+        date,
+        (jb->'person_id')::int person_id,
+        jb->>'demography' demography,
+        regexp_split_to_table(jb->>'contacts', '') contact
+    FROM (
+        SELECT
+            date,
+            jsonb_array_elements(content) jb
+        FROM
+            jsonb_audience
+        ) ta
+    WHERE
+        jb->>'contacts' != ''
+);
+
+INSERT INTO targets (
+    SELECT
+        (jb->'target')::int id,
+        replace(jb->>'definition', ' ', '_') definition
+    FROM (
+        SELECT
+            jsonb_array_elements(content) jb
+        FROM
+            jsonb_targets
+        ) tt
+);
+
+DROP TABLE IF EXISTS jsonb_audience, jsonb_targets;
+\end{lstlisting}
+Zapytanie:
+\begin{lstlisting}
+SELECT
+    audience.date dzien,
+    targets.id grupa,
+    audience.contact reklama,
+    count(*) osob
+FROM
+    audience
+JOIN
+    targets
+ON
+    audience.demography LIKE targets.definition
+GROUP BY
+    dzien,
+    grupa,
+    reklama
+ORDER BY
+    dzien,
+    grupa,
+    reklama;
+\end{lstlisting}
+Wynik:
+\begin{lstlisting}
+   dzien    | grupa | reklama | osob 
+------------+-------+---------+------
+ 2019-01-01 |     0 | B       |    1
+ 2019-01-01 |     0 | C       |    2
+ 2019-01-01 |     0 | E       |    2
+ ...
+ 2019-01-30 |     9 | X       |    1
+ 2019-01-30 |     9 | Y       |    2
+ 2019-01-30 |     9 | Z       |    3
+(5721 rows)
+\end{lstlisting}
+Statystyki wykonania (fragment wyniku \texttt{EXPLAIN ANALYZE}):
+\begin{lstlisting}
+ Planning Time: 0.125 ms
+ Execution Time: 29.539 ms
+\end{lstlisting}
+
+
+\section{Podsumowanie}
+
+Wykonanie zapytania w wersji SQLowej jest istotnie szybsze. Jeśli doliczymy czas przenoszenia danych do właściwych tabel,
+to wynik jest dużo gorszy, ale nadal lepszy od wersji JSONowej ---
+\texttt{Execution Time} dla \texttt{INSERT INTO audience}: \texttt{288.620 ms}, dla \texttt{INSERT INTO targets}: \texttt{0.206 ms},
+co łącznie daje \texttt{318.365 ms}.
+
+
+\end{document}
