@@ -11,9 +11,9 @@ Mamy trzy typy procesów:
 1. Podaje informacje o tym, że możemy wyświetlić reklamę internaucie zapisując do bazy unikalny identyfikator internauty (cookie jakieś) oraz jego adres IP
 2. Dowiaduje się o tym, że pojawiła się możliwość wyświetlenia reklamy (proces typu 1 zgłosił) pobiera informację o identyfikatorze, wzbogaca ją (np. dopisuje geolokalizację czyli kraj i miasto) i zapisuje te informacje w bazie
 3. Dowiaduje się, że można wyemitować internaucie reklamę i robi jedną z trzech rzeczy:
-  - emituje reklamę tylko w oparciu o informacje z procesu 1 czasem,
-  - emituje reklamę w oparciu o informacje z procesów 1 i 2 czasem,
-  - nie emituje reklamy.
+   1. emituje reklamę tylko w oparciu o informacje z procesu 1 czasem,
+   2. emituje reklamę w oparciu o informacje z procesów 1 i 2 czasem,
+   3. nie emituje reklamy.
 
 Emisja reklamy polega na zapisaniu do bazy danych informacji o tym, że reklama ma być wyemitowana. Emisja musi nastąpić bardzo szybko (rzędu 20ms) po otrzymaniu informacji od procesu typue 1.
 
